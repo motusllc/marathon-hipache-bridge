@@ -1,12 +1,14 @@
 # MarathonHipacheBridge
-Syncs healthy hosts between Redis and Marathon
 
+Syncs healthy hosts between Redis and Marathon
+```
 usage: Bridge.groovy [options]
  -i,--Interval <INTERVAL>     Interval in seconds at which the bridge
                               syncs Redis with Marathon
  -m,--MarathonUrl <URL>       Marathon url
  -P,--AppsPath <PATH>         Example: /v2/apps
  -r,--RedisHost <HOST:PORT>   indicate Redis host and port
+```
 
 To run on the command line:
 ```
