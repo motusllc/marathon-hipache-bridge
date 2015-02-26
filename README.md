@@ -14,3 +14,9 @@ To run on the command line:
 ```
 ./Bridge.groovy -i 5 -m http://mesosmaster1-staging.motus.com:8080/ -P /v2/apps -r redirect1-staging.crsinc.com:6379
 ```
+
+To run in a docker container:
+```
+docker build --rm -t <tag> .
+docker run <tag> ./Bridge.groovy -i 5 -m http://mesosmaster1-staging.motus.com:8080/ -P /v2/apps -r redirect1-staging.crsinc.com:6379
+```
