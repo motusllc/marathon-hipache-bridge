@@ -40,7 +40,7 @@ class BridgeSynchronizer {
             response.success = { resp, json ->
                 def appList = []
                 json.apps.id.each {
-                    if (!it.toString().contains('hipcheck')) {
+                    if (!(it.contains('hipcheck') || it.contains('marathon-hipache-bridge'))) {
                         appList.add(it.toString())
                     }
                 }
@@ -70,10 +70,13 @@ class BridgeSynchronizer {
                 }
 
                 def marathonHosts = []
-                json.app.tasks.each {
-                    if (it.healthCheckResults.alive) {
-                        for (port in it.ports) {
-                            marathonHosts.add('http://' + it.host + ':' + port)
+
+                if (!json.app.tasks.empty) {
+                    json.app.tasks.each {
+                        if (it.healthCheckResults.alive) {
+                            for (port in it.ports) {
+                                marathonHosts.add('http://' + it.host + ':' + port)
+                            }
                         }
                     }
                 }
