@@ -44,6 +44,8 @@ class BridgeSynchronizer {
                         appList.add(it.toString())
                     }
                 }
+
+                log.info("${appList.size()} apps retrieved from Marathon:")
                 return appList
             }
 
@@ -149,11 +151,12 @@ class BridgeSynchronizer {
 
             // Connect to Marathon to get a list of apps
             def http = new HTTPBuilder(marathonUrl)
-            def appList = getAppList(http, appsPath)
 
             def timer = new Timer()
             def task = timer.runEvery(1000, interval * 1000) {
                 println()
+                def appList = getAppList(http, appsPath)
+
                 syncApps(http, jedis, appList, appsPath)
                 log.info("Bridge synced at ${new Date()}.")
 
