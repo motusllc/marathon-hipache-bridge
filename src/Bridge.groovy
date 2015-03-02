@@ -37,8 +37,9 @@ class BridgeSynchronizer {
         http.request(GET, JSON) {
             uri.path = appsPath
 
+            def appList = []
+
             response.success = { resp, json ->
-                def appList = []
                 json.apps.id.each {
                     if (!(it.contains('hipcheck') || it.contains('marathon-hipache-bridge'))) {
                         appList.add(it.toString())
@@ -51,6 +52,7 @@ class BridgeSynchronizer {
 
             response.failure = { resp ->
                 log.info("Unexpected error when retieving list of apps from marathon: ${resp.statusLine.statusCode} : ${resp.statusLine.reasonPhrase}")
+                return appList
             }
         }
     }
@@ -60,9 +62,11 @@ class BridgeSynchronizer {
         http.request(GET, JSON) {
             uri.path = appPath
 
+            def redisKeys = []
+            def marathonHosts = []
+
             response.success = { resp, json ->
 
-                def redisKeys = []
 
                 // If no front end is listed in Marathon, no changes will be made to Redis
                 if (json.app.labels.hipacheFrontend) {
@@ -71,23 +75,22 @@ class BridgeSynchronizer {
                     }
                 }
 
-                def marathonHosts = []
 
                 if (!json.app.tasks.empty) {
                     json.app.tasks.each {
-                        if (it.healthCheckResults.alive) {
+                        if (it.healthCheckResults && it.healthCheckResults.alive) {
                             for (port in it.ports) {
                                 marathonHosts.add('http://' + it.host + ':' + port)
                             }
                         }
                     }
                 }
-
                 return [redisKeys, marathonHosts]
             }
 
             response.failure = { resp ->
                 log.info("Unexpected error when retrieving information for $appPath: ${resp.statusLine.statusCode} : ${resp.statusLine.reasonPhrase}")
+                return [redisKeys, marathonHosts]
             }
         }
     }
@@ -156,7 +159,7 @@ class BridgeSynchronizer {
             def task = timer.runEvery(1000, interval * 1000) {
                 println()
                 def appList = getAppList(http, appsPath)
-
+                
                 syncApps(http, jedis, appList, appsPath)
                 log.info("Bridge synced at ${new Date()}.")
 
