@@ -79,9 +79,8 @@ class BridgeSynchronizer {
                 if (!json.app.tasks.empty) {
                     json.app.tasks.each {
                         if (it.healthCheckResults && it.healthCheckResults.alive) {
-                            for (port in it.ports) {
-                                marathonHosts.add('http://' + it.host + ':' + port)
-                            }
+                            // Only take the first port to construct host address
+                            marathonHosts.add('http://' + it.host + ':' + it.ports[0])
                         }
                     }
                 }
