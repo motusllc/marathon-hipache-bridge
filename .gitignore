@@ -1,0 +1,7 @@
+# Created by .ignore support plugin (hsz.mobi)
+.idea/
+src/Bridge.log
+MarathonHipacheBridge.iml
+out/
+src/Bridge.log
+.gitignore
