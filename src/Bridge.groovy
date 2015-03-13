@@ -79,8 +79,12 @@ class BridgeSynchronizer {
                 if (!json.app.tasks.empty) {
                     json.app.tasks.each {
                         if (it.healthCheckResults && it.healthCheckResults.alive) {
-                            // Only take the first port to construct host address
-                            marathonHosts.add('http://' + it.host + ':' + it.ports[0])
+                            if (it.ports == null || it.ports.empty) {
+                                log.info("List of ports for " + json.app.id + " is not properly configured")
+                            } else {
+                                // Only take the first port to construct host address
+                                marathonHosts.add('http://' + it.host + ':' + it.ports[0])
+                            }
                         }
                     }
                 }
