@@ -75,6 +75,7 @@ class BridgeSynchronizer {
                     }
                 }
 
+                boolean marathonIsValid = true;
 
                 if (!json.app.tasks.empty) {
                     json.app.tasks.each {
@@ -85,10 +86,12 @@ class BridgeSynchronizer {
                                 // Only take the first port to construct host address
                                 marathonHosts.add('http://' + it.host + ':' + it.ports[0])
                             }
+                        } else {
+                            marathonIsValid = false;
                         }
                     }
                 }
-                return [redisKeys, marathonHosts]
+                return [redisKeys, marathonIsValid, marathonHosts]
             }
 
             response.failure = { resp ->
@@ -99,7 +102,7 @@ class BridgeSynchronizer {
     }
 
     // Sync Redis hosts with Marathon hosts for a single app
-    def sync(Jedis jedis, List keys, List marathonHosts) {
+    def sync(Jedis jedis, List keys, boolean marathonIsValid, List marathonHosts) {
 
         for (key in keys) {
 
@@ -114,20 +117,25 @@ class BridgeSynchronizer {
 
             def redisHosts = jedis.lrange(key, 1, -1)
 
-            // If Redis does not contain a healthy host listed in Marathon, add it to Redis
-            marathonHosts.each {
-                if (!redisHosts.contains(it)) {
-                    jedis.rpush(key, it)
-                    log.info("Added new host $it for $key in Redis")
+            // Only sync with Redis if Marathon has valid healthcheck results
+            if (marathonIsValid) {
+                // If Redis does not contain a healthy host listed in Marathon, add it to Redis
+                marathonHosts.each {
+                    if (!redisHosts.contains(it)) {
+                        jedis.rpush(key, it)
+                        log.info("Added new host $it for $key in Redis")
+                    }
                 }
-            }
 
-            // If Redis contains a host not listed in Marathon, remove it from Redis
-            redisHosts.each {
-                if (!marathonHosts.contains(it)) {
-                    def hostsRemoved = jedis.lrem(key, 0, it)
-                    log.info("$hostsRemoved instances of $it removed for $key in Redis")
+                // If Redis contains a host not listed in Marathon, remove it from Redis
+                redisHosts.each {
+                    if (!marathonHosts.contains(it)) {
+                        def hostsRemoved = jedis.lrem(key, 0, it)
+                        log.info("$hostsRemoved instances of $it removed for $key in Redis")
+                    }
                 }
+            } else {
+                log.info("Marathon health check results are invalid. No changes are made in Redis.")
             }
         }
     }
@@ -138,8 +146,9 @@ class BridgeSynchronizer {
             log.info("Syncing for ${appId}")
             def redisKeys = []
             def marathonHosts = []
-            (redisKeys, marathonHosts) = getMarathonData(http, "${appsPath}$appId")
-            sync(jedis, redisKeys, marathonHosts)
+            boolean marathonIsValid = true
+            (redisKeys, marathonIsValid, marathonHosts) = getMarathonData(http, "${appsPath}$appId")
+            sync(jedis, redisKeys, marathonIsValid, marathonHosts)
         }
     }
 
@@ -160,12 +169,18 @@ class BridgeSynchronizer {
 
             def timer = new Timer()
             def task = timer.runEvery(1000, interval * 1000) {
-                println()
-                def appList = getAppList(http, appsPath)
-                
-                syncApps(http, jedis, appList, appsPath)
-                log.info("Bridge synced at ${new Date()}.")
 
+                try {
+                    println()
+                    def appList = getAppList(http, appsPath)
+
+                    syncApps(http, jedis, appList, appsPath)
+                    log.info("Bridge synced at ${new Date()}.")
+
+                } catch (all) {
+                    log.info("ERROR CAUGHT!!!")
+                    log.info(all)
+                }
             }
             log.info("Initializing bridge at ${new Date()}.")
         }
