@@ -160,12 +160,18 @@ class BridgeSynchronizer {
 
             def timer = new Timer()
             def task = timer.runEvery(1000, interval * 1000) {
-                println()
-                def appList = getAppList(http, appsPath)
-                
-                syncApps(http, jedis, appList, appsPath)
-                log.info("Bridge synced at ${new Date()}.")
 
+                try {
+                    println()
+                    def appList = getAppList(http, appsPath)
+
+                    syncApps(http, jedis, appList, appsPath)
+                    log.info("Bridge synced at ${new Date()}.")
+
+                } catch (all) {
+                    log.info("ERROR CAUGHT!!!")
+                    log.info(all)
+                }
             }
             log.info("Initializing bridge at ${new Date()}.")
         }
