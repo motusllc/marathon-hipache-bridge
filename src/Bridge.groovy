@@ -161,8 +161,6 @@ class BridgeSynchronizer {
 
         log.info("Logger Initialized")
         use(TimerMethods) {
-            // Connect to Redis
-            Jedis jedis = new Jedis(redisHost, redisPort)
 
             // Connect to Marathon to get a list of apps
             def http = new HTTPBuilder(marathonUrl)
@@ -172,14 +170,16 @@ class BridgeSynchronizer {
 
                 try {
                     println()
-                    def appList = getAppList(http, appsPath)
 
+                    // Connect to Redis
+                    Jedis jedis = new Jedis(redisHost, redisPort)
+                    def appList = getAppList(http, appsPath)
                     syncApps(http, jedis, appList, appsPath)
                     log.info("Bridge synced at ${new Date()}.")
 
                 } catch (all) {
-                    log.info("ERROR CAUGHT!!!")
-                    log.info(all)
+                    log.info("Error caught at ${new Date()}.")
+                    log.error("Error caught at ${new Date()}.", all)
                 }
             }
             log.info("Initializing bridge at ${new Date()}.")
