@@ -178,7 +178,6 @@ class BridgeSynchronizer {
                     log.info("Bridge synced at ${new Date()}.")
 
                 } catch (all) {
-                    log.info("Error caught at ${new Date()}.")
                     log.error("Error caught at ${new Date()}.", all)
                 }
             }
