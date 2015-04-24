@@ -82,7 +82,7 @@ class BridgeSynchronizer {
 
                 if (!json.app.tasks.empty) {
                     json.app.tasks.each {
-                        if (it.healthCheckResults[0]) {
+                        if (it.healthCheckResults && it.healthCheckResults[0]) {
                             if (it.ports == null || it.ports.empty) {
                                 log.info("List of ports for " + json.app.id + " is not properly configured")
                             } else if (it.healthCheckResults.alive[0]) {
