@@ -19,18 +19,22 @@ cli.r(longOpt:'RedisHost', args:2, valueSeparator:':', argName:'HOST:PORT',
 cli.P(longOpt:'AppsPath', args: 1, argName:'PATH', 'Example: /v2/apps')
 cli.m(longOpt:'MarathonUrl', args:1, argName:'URL', 'Marathon url')
 cli.i(longOpt:'Interval', args:1, argName:'INTERVAL', 'Interval in seconds at which the bridge syncs Redis with Marathon')
+cli.d(longOpt:'DryRun', 'Dry run - do not update redis')
 
 // Start execution
 if (!args) {
     cli.usage()
 } else {
     def options = cli.parse(args)
-    new BridgeSynchronizer().runBridge(options.rs.get(0),  Integer.parseInt(options.rs.get(1)),
-                                       options.P, options.m, Integer.parseInt(options.i))
+    new BridgeSynchronizer(dryRun: options.d)
+        .runBridge(options.rs.get(0),  Integer.parseInt(options.rs.get(1)),
+                   options.P, options.m, Integer.parseInt(options.i))
 }
 
 @Log4j
 class BridgeSynchronizer {
+
+    Boolean dryRun = false
 
     // Get a list of all apps that are not associated with hipcheck
     def getAppList(HTTPBuilder http, String appsPath) {
@@ -63,7 +67,8 @@ class BridgeSynchronizer {
             uri.path = appPath
 
             def redisKeys = []
-            def marathonHosts = []
+            def validHosts = []
+            def invalidHosts = []
 
             response.success = { resp, json ->
 
@@ -75,34 +80,32 @@ class BridgeSynchronizer {
                     }
                 }
 
-                boolean marathonIsValid = true;
-
                 if (!json.app.tasks.empty) {
                     json.app.tasks.each {
-                        if (it.healthCheckResults && it.healthCheckResults.alive) {
+                        if (it.healthCheckResults[0]) {
                             if (it.ports == null || it.ports.empty) {
                                 log.info("List of ports for " + json.app.id + " is not properly configured")
-                            } else {
+                            } else if (it.healthCheckResults.alive[0]) {
                                 // Only take the first port to construct host address
-                                marathonHosts.add('http://' + it.host + ':' + it.ports[0])
+                                validHosts.add('http://' + it.host + ':' + it.ports[0])
                             }
                         } else {
-                            marathonIsValid = false;
+                            invalidHosts.add('http://' + it.host + ':' + it.ports[0])
                         }
                     }
                 }
-                return [redisKeys, marathonIsValid, marathonHosts]
+                return [redisKeys, validHosts, invalidHosts]
             }
 
             response.failure = { resp ->
                 log.info("Unexpected error when retrieving information for $appPath: ${resp.statusLine.statusCode} : ${resp.statusLine.reasonPhrase}")
-                return [redisKeys, marathonHosts]
+                return [redisKeys, validHosts]
             }
         }
     }
 
     // Sync Redis hosts with Marathon hosts for a single app
-    def sync(Jedis jedis, List keys, boolean marathonIsValid, List marathonHosts) {
+    def sync(Jedis jedis, List keys, List validHosts, List invalidHosts) {
 
         for (key in keys) {
 
@@ -117,25 +120,32 @@ class BridgeSynchronizer {
 
             def redisHosts = jedis.lrange(key, 1, -1)
 
-            // Only sync with Redis if Marathon has valid healthcheck results
-            if (marathonIsValid) {
-                // If Redis does not contain a healthy host listed in Marathon, add it to Redis
-                marathonHosts.each {
-                    if (!redisHosts.contains(it)) {
+            // If Redis does not contain a healthy host listed in Marathon, add it to Redis
+            validHosts.each {
+                if (!redisHosts.contains(it)) {
+                    if (!dryRun) {
                         jedis.rpush(key, it)
                         log.info("Added new host $it for $key in Redis")
+                    } else {
+                        log.info("Would have added new host $it for $key in Redis")
                     }
                 }
+            }
 
-                // If Redis contains a host not listed in Marathon, remove it from Redis
-                redisHosts.each {
-                    if (!marathonHosts.contains(it)) {
-                        def hostsRemoved = jedis.lrem(key, 0, it)
-                        log.info("$hostsRemoved instances of $it removed for $key in Redis")
+            // If Redis contains a host not listed in Marathon, remove it from Redis
+            redisHosts.each {
+                if (!validHosts.contains(it)) {
+                    if (invalidHosts.contains(it)) {
+                        log.info("$it has no health check results, so leaving in airfield for now")
+                    } else {
+                        if (!dryRun) {
+                            def hostsRemoved = jedis.lrem(key, 0, it)
+                            log.info("$hostsRemoved instances of $it removed for $key in Redis")
+                        } else {
+                            log.info("Would have removed instances of $it removed for $key in Redis")
+                        }                           
                     }
                 }
-            } else {
-                log.info("Marathon health check results are invalid. No changes are made in Redis.")
             }
         }
     }
@@ -145,10 +155,10 @@ class BridgeSynchronizer {
         for (appId in appList) {
             log.info("Syncing for ${appId}")
             def redisKeys = []
-            def marathonHosts = []
-            boolean marathonIsValid = true
-            (redisKeys, marathonIsValid, marathonHosts) = getMarathonData(http, "${appsPath}$appId")
-            sync(jedis, redisKeys, marathonIsValid, marathonHosts)
+            def validHosts = []
+            def invalidHosts = []
+            (redisKeys, validHosts, invalidHosts) = getMarathonData(http, "${appsPath}$appId")
+            sync(jedis, redisKeys, validHosts, invalidHosts)
         }
     }
 
