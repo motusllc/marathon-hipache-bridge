@@ -11,5 +11,8 @@ ENV PATH $GROOVY_HOME/bin:$PATH
 # Add source file
 ADD . .
 
+# Install grapes
+RUN /bin/bash -c "source /src/install-grapes.sh"
+
 # Switch working directory
 WORKDIR ./src

@@ -1,6 +1,6 @@
 #!/usr/bin/env groovy
 
-@Grab(group='org.codehaus.groovy.modules.http-builder', module='http-builder', version='0.7' )
+@Grab(group='org.codehaus.groovy.modules.http-builder', module='http-builder', version='0.7.1' )
 @Grab(group='redis.clients', module='jedis', version='2.1.0')
 @Grab('log4j:log4j:1.2.17')
 
