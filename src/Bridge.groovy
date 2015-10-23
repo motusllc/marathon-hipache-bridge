@@ -20,15 +20,17 @@ cli.P(longOpt:'AppsPath', args: 1, argName:'PATH', 'Example: /v2/apps')
 cli.m(longOpt:'MarathonUrl', args:1, argName:'URL', 'Marathon url')
 cli.i(longOpt:'Interval', args:1, argName:'INTERVAL', 'Interval in seconds at which the bridge syncs Redis with Marathon')
 cli.d(longOpt:'DryRun', 'Dry run - do not update redis')
+cli.l(longOpt:'IncludeLabel', args:1, argName:'LABEL', required:false, 'Only include apps with this label. Looks at the name of the label, ignores the value')
 
 // Start execution
 if (!args) {
     cli.usage()
 } else {
     def options = cli.parse(args)
+    println(options)
     new BridgeSynchronizer(dryRun: options.d)
         .runBridge(options.rs.get(0),  Integer.parseInt(options.rs.get(1)),
-                   options.P, options.m, Integer.parseInt(options.i))
+                   options.P, options.m, Integer.parseInt(options.i), (options.l ? options.l : null))
 }
 
 @Log4j
@@ -37,16 +39,19 @@ class BridgeSynchronizer {
     Boolean dryRun = false
 
     // Get a list of all apps that are not associated with hipcheck
-    def getAppList(HTTPBuilder http, String appsPath) {
+    def getAppList(HTTPBuilder http, String appsPath, String includeLabel) {
         http.request(GET, JSON) {
             uri.path = appsPath
 
             def appList = []
 
             response.success = { resp, json ->
-                json.apps.id.each {
-                    if (!(it.contains('hipcheck') || it.contains('marathon-hipache-bridge'))) {
-                        appList.add(it.toString())
+                json.apps.each {
+                    if (!(it.id.contains('hipcheck') || it.id.contains('marathon-hipache-bridge'))) {
+
+                        if (includeLabel == null || it.labels[includeLabel] != null) {
+                            appList.add(it.id.toString())
+                        }
                     }
                 }
 
@@ -163,7 +168,7 @@ class BridgeSynchronizer {
     }
 
     // Periodically sync bridge for all apps
-    def runBridge(String redisHost, int redisPort, String appsPath, String marathonUrl, int interval) {
+    def runBridge(String redisHost, int redisPort, String appsPath, String marathonUrl, int interval, String includeLabel) {
 
         // Configure logger
         log.level = Level.INFO
@@ -183,7 +188,7 @@ class BridgeSynchronizer {
 
                     // Connect to Redis
                     Jedis jedis = new Jedis(redisHost, redisPort)
-                    def appList = getAppList(http, appsPath)
+                    def appList = getAppList(http, appsPath, includeLabel)
                     syncApps(http, jedis, appList, appsPath)
                     log.info("Bridge synced at ${new Date()}.")
 
